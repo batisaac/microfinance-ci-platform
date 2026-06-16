@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>COFINANCE CI — {% block title %}Plateforme{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231E3A8A'/><text x='16' y='22' font-size='18' font-weight='bold' fill='white' text-anchor='middle'>C</text></svg>">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1E3A8A;
+      --primary-light: #2563EB;
+      --success: #10B981;
+      --warning: #F59E0B;
+      --danger: #EF4444;
+      --bg-body: #F1F5F9;
+      --sidebar-width: 260px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg-body);
+      min-height: 100vh;
+      display: flex;
+    }
+    .sidebar {
+      width: var(--sidebar-width);
+      background: linear-gradient(180deg, #1E3A8A 0%, #1a2f6e 100%);
+      min-height: 100vh;
+      position: fixed;
+      left: 0; top: 0;
+      z-index: 1000;
+      transition: transform .3s;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-brand {
+      padding: 1.5rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .sidebar-brand h3 {
+      color: #fff;
+      font-weight: 800;
+      font-size: 1.35rem;
+      letter-spacing: -.5px;
+      margin: 0;
+    }
+    .sidebar-brand small {
+      color: rgba(255,255,255,.5);
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .sidebar-nav { padding: 1rem 0; flex: 1; overflow-y: auto; }
+    .sidebar-nav .nav-item {
+      padding: .65rem 1.25rem;
+      color: rgba(255,255,255,.6);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      font-size: .9rem;
+      font-weight: 500;
+      transition: all .2s;
+      border-left: 3px solid transparent;
+    }
+    .sidebar-nav .nav-item:hover, .sidebar-nav .nav-item.active {
+      color: #fff;
+      background: rgba(255,255,255,.08);
+      border-left-color: var(--success);
+    }
+    .sidebar-nav .nav-item i { font-size: 1.2rem; width: 1.5rem; text-align: center; }
+    .sidebar-nav .nav-label {
+      padding: .75rem 1.25rem .25rem;
+      color: rgba(255,255,255,.3);
+      font-size: .65rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+    .sidebar-footer {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .sidebar-footer .user-info {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      color: rgba(255,255,255,.7);
+    }
+    .sidebar-footer .user-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: .85rem;
+      color: #fff;
+    }
+    .main-content {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      background: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+      position: sticky;
+      top: 0;
+      z-index: 999;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 1rem; }
+    .topbar-left .toggle-sidebar {
+      display: none;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: var(--primary);
+      cursor: pointer;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 1.5rem; }
+    .topbar-right .notif-bell {
+      position: relative;
+      color: #64748B;
+      text-decoration: none;
+      font-size: 1.25rem;
+    }
+    .topbar-right .notif-bell .badge {
+      position: absolute;
+      top: -5px; right: -5px;
+      font-size: .6rem;
+      padding: .15rem .35rem;
+    }
+    .topbar-right .logout-btn {
+      color: #64748B;
+      text-decoration: none;
+      font-size: .85rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      transition: color .2s;
+    }
+    .topbar-right .logout-btn:hover { color: var(--danger); }
+    .page-content { padding: 2rem; flex: 1; }
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.75rem;
+    }
+    .page-header h4 {
+      font-weight: 700;
+      color: #0F172A;
+      margin: 0;
+    }
+    .page-header .breadcrumb {
+      margin: 0;
+      background: none;
+      padding: 0;
+      font-size: .8rem;
+    }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); transition: transform .25s ease; }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar.open + .sidebar-overlay { display: block; }
+      .main-content { margin-left: 0; }
+      .topbar-left .toggle-sidebar { display: block; }
+      .page-content { padding: 1.25rem; }
+    }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 999; }
+    .stat-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+    .stat-card .icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .stat-card .label { font-size: .8rem; color: #64748B; font-weight: 500; }
+    .stat-card .value { font-size: 1.75rem; font-weight: 700; color: #0F172A; }
+    .stat-card .change { font-size: .75rem; margin-top: .25rem; }
+    .badge-status {
+      font-size: .75rem;
+      font-weight: 600;
+      padding: .3rem .65rem;
+      border-radius: 20px;
+    }
+    .card-dashboard {
+      background: #fff;
+      border-radius: 16px;
+      border: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .card-dashboard .card-header {
+      background: none;
+      border-bottom: 1px solid #F1F5F9;
+      padding: 1.25rem 1.5rem;
+      font-weight: 600;
+    }
+    .table-cof > :not(caption) > * > * {
+      padding: .85rem 1rem;
+      vertical-align: middle;
+      font-size: .875rem;
+    }
+    .table-cof thead th {
+      background: #F8FAFC;
+      color: #64748B;
+      font-weight: 600;
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-bottom: none;
+    }
+    .btn-cof {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: .5rem 1.25rem;
+      font-weight: 600;
+      font-size: .85rem;
+      transition: all .2s;
+    }
+    .btn-cof:hover { background: var(--primary-light); color: #fff; }
+    .btn-cof-outline {
+      background: none;
+      border: 2px solid var(--primary);
+      color: var(--primary);
+      border-radius: 10px;
+      padding: .45rem 1.25rem;
+      font-weight: 600;
+      font-size: .85rem;
+      transition: all .2s;
+    }
+    .btn-cof-outline:hover { background: var(--primary); color: #fff; }
+    .btn-success-cof { background: var(--success); color: #fff; border: none; border-radius: 10px; padding: .5rem 1.25rem; font-weight: 600; font-size: .85rem; }
+    .btn-success-cof:hover { opacity: .9; color: #fff; }
+    .spinner-border-sm-custom { width: 1rem; height: 1rem; }
+    .toast-container { z-index: 9999; }
+    .page-content.loading { opacity: .5; pointer-events: none; }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <h3>COFINANCE</h3>
+      <small>Plateforme de gestion</small>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Navigation</div>
+      <a href="/dashboard/" class="nav-item" data-nav="dashboard"><i class="bi bi-grid-1x2-fill"></i> Tableau de bord</a>
+      <a href="/loans/" class="nav-item" data-nav="loans"><i class="bi bi-cash-stack"></i> Micro-crédits</a>
+      <a href="/insurance/" class="nav-item" data-nav="insurance"><i class="bi bi-shield-check"></i> Assurance</a>
+      <a href="/notifications/" class="nav-item" data-nav="notifications"><i class="bi bi-bell"></i> Notifications <span class="badge bg-danger rounded-pill notif-counter" style="display:none;font-size:.6rem;margin-left:auto">0</span></a>
+      <div class="nav-label">Support</div>
+      <a href="/chat/" class="nav-item" data-nav="chat"><i class="bi bi-chat-dots-fill"></i> Chat support</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="sidebar-avatar">A</div>
+        <div style="line-height:1.3">
+          <div style="font-size:.85rem;font-weight:600" id="sidebar-name">Utilisateur</div>
+          <div style="font-size:.7rem;opacity:.6" id="sidebar-role">—</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="document.getElementById('sidebar').classList.remove('open')"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="toggle-sidebar" onclick="document.getElementById('sidebar').classList.toggle('open')">
+          <i class="bi bi-list"></i>
+        </button>
+        <span style="font-weight:600;color:#0F172A;font-size:.9rem" id="page-title">{% block page_title %}{% endblock %}</span>
+      </div>
+      <div class="topbar-right">
+        <a href="/notifications/" class="notif-bell" id="notif-bell-top">
+          <i class="bi bi-bell"></i>
+          <span class="badge bg-danger rounded-pill notif-counter" style="display:none">0</span>
+        </a>
+        <a href="#" class="logout-btn" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Déconnexion</a>
+      </div>
+    </header>
+
+    <main class="page-content" id="main-content">
+      <div id="page-content-inner">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script>
+    const API_BASE = '/api/v1/';
+    let currentUser = null;
+
+    function getTokens() {
+      const access = localStorage.getItem('access_token');
+      const refresh = localStorage.getItem('refresh_token');
+      return { access, refresh };
+    }
+
+    function setTokens(access, refresh) {
+      localStorage.setItem('access_token', access);
+      if (refresh) localStorage.setItem('refresh_token', refresh);
+    }
+
+    function clearTokens() {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_data');
+    }
+
+    function isLoggedIn() {
+      return !!getTokens().access;
+    }
+
+    function getAuthHeaders() {
+      const { access } = getTokens();
+      return { 'Authorization': `Bearer ${access}`, 'Content-Type': 'application/json' };
+    }
+
+    async function apiFetch(url, options = {}) {
+      const { access, refresh } = getTokens();
+      const headers = { 'Content-Type': 'application/json', ...options.headers };
+      if (access) headers['Authorization'] = `Bearer ${access}`;
+      let res = await fetch(API_BASE + url, { ...options, headers });
+      if (res.status === 401 && refresh) {
+        const refreshRes = await fetch(API_BASE + 'auth/token/refresh/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh }),
+        });
+        if (refreshRes.ok) {
+          const data = await refreshRes.json();
+          setTokens(data.access, data.refresh);
+          headers['Authorization'] = `Bearer ${data.access}`;
+          res = await fetch(API_BASE + url, { ...options, headers });
+        } else {
+          clearTokens();
+          window.location.href = '/login/';
+          return null;
+        }
+      }
+      return res;
+    }
+
+    async function apiFetchJSON(url, options = {}) {
+      const res = await apiFetch(url, options);
+      if (!res) return null;
+      if (res.status === 204) return null;
+      return res.json();
+    }
+
+    function getResults(data) {
+      return data && data.results ? data.results : data;
+    }
+
+    function showToast(message, type = 'success') {
+      const iconMap = { success: 'bi-check-circle-fill', danger: 'bi-exclamation-triangle-fill', warning: 'bi-exclamation-circle-fill', info: 'bi-info-circle-fill' };
+      const container = document.getElementById('toast-container');
+      const id = 't-' + Date.now();
+      container.insertAdjacentHTML('beforeend',
+        `<div id="${id}" class="toast align-items-center text-white bg-${type} border-0" role="alert">
+          <div class="d-flex"><div class="toast-body"><i class="bi ${iconMap[type] || 'bi-info-circle-fill'} me-2"></i>${message}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>
+        </div>`
+      );
+      const el = document.getElementById(id);
+      bootstrap.Toast.getOrCreateInstance(el, { delay: 4000 }).show();
+      el.addEventListener('hidden.bs.toast', () => el.remove());
+    }
+
+    function formatCurrency(n) {
+      return new Intl.NumberFormat('fr-FR', { style: 'decimal', maximumFractionDigits: 0 }).format(n) + ' FCFA';
+    }
+
+    function formatDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function formatDateTime(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function statusBadge(status) {
+      const map = {
+        'soumise': 'bg-warning text-dark',
+        'en_analyse': 'bg-info text-white',
+        'approuvee': 'bg-success text-white',
+        'decaissée': 'bg-primary text-white',
+        'rejetee': 'bg-danger text-white',
+        'active': 'bg-success text-white',
+        'expiree': 'bg-secondary text-white',
+        'annulee': 'bg-danger text-white',
+        'open': 'bg-success text-white',
+        'closed': 'bg-secondary text-white',
+        'pending': 'bg-warning text-dark',
+        'paid': 'bg-success text-white',
+        'late': 'bg-danger text-white',
+      };
+      const labels = {
+        'soumise': 'Soumise',
+        'en_analyse': 'En analyse',
+        'approuvee': 'Approuvée',
+        'decaissée': 'Décaissée',
+        'rejetee': 'Rejetée',
+        'active': 'Active',
+        'expiree': 'Expirée',
+        'annulee': 'Annulée',
+        'open': 'Ouverte',
+        'closed': 'Fermée',
+        'pending': 'À payer',
+        'paid': 'Payé',
+        'late': 'En retard',
+      };
+      return `<span class="badge-status ${map[status] || 'bg-secondary'}">${labels[status] || status}</span>`;
+    }
+
+    async function loadUser() {
+      if (!isLoggedIn()) { window.location.href = '/login/'; return null; }
+      let user = localStorage.getItem('user_data');
+      if (user) {
+        currentUser = JSON.parse(user);
+        updateSidebar();
+        return currentUser;
+      }
+      try {
+        const data = await apiFetchJSON('auth/profile/');
+        if (data) {
+          currentUser = data;
+          localStorage.setItem('user_data', JSON.stringify(data));
+          updateSidebar();
+          return data;
+        }
+      } catch(e) { clearTokens(); window.location.href = '/login/'; }
+      return null;
+    }
+
+    function updateSidebar() {
+      if (!currentUser) return;
+      document.getElementById('sidebar-avatar').textContent = (currentUser.first_name || 'U')[0];
+      document.getElementById('sidebar-name').textContent = currentUser.full_name || currentUser.first_name + ' ' + currentUser.last_name;
+      document.getElementById('sidebar-role').textContent = currentUser.role === 'admin' ? 'Administrateur' : currentUser.role === 'agent' ? 'Agent de terrain' : 'Client';
+      document.querySelectorAll('.sidebar-nav .nav-item').forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav .nav-item[data-nav="${window._currentPage}"]`);
+      if (active) active.classList.add('active');
+    }
+
+    async function loadNotifCount() {
+      try {
+        const data = await apiFetchJSON('notifications/?unread=true&page_size=1');
+        if (data) {
+          const count = data.count || 0;
+          const badges = document.querySelectorAll('.notif-counter');
+          badges.forEach(b => {
+            if (count > 0) { b.textContent = count > 99 ? '99+' : count; b.style.display = ''; }
+            else { b.style.display = 'none'; }
+          });
+        }
+      } catch(e) {}
+    }
+
+    function logout() {
+      clearTokens();
+      window.location.href = '/login/';
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const publicPages = ['/login/'];
+      if (publicPages.includes(window.location.pathname)) return;
+      await loadUser();
+      loadNotifCount();
+      setInterval(loadNotifCount, 30000);
+    });
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

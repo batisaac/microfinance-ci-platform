@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Micro-crédits{% endblock %}
+{% block page_title %}Micro-crédits{% endblock %}
+{% block extra_css %}
+<style>
+  @media (max-width: 576px) {
+    .loans-toolbar { flex-direction: column; align-items: stretch !important; }
+    .loans-toolbar .ms-auto { margin-left: 0 !important; width: 100%; }
+    .loans-toolbar .btn { width: 100%; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<script>window._currentPage = 'loans';</script>
+
+<div class="d-flex flex-wrap gap-2 mb-4 loans-toolbar">
+  <button class="btn btn-cof" data-bs-toggle="modal" data-bs-target="#createLoanModal"><i class="bi bi-plus-lg"></i> Nouvelle demande</button>
+  <div class="ms-auto d-flex gap-2 flex-grow-1 flex-sm-grow-0" style="max-width:100%">
+    <select class="form-select form-select-sm" id="filter-status" style="width:auto;min-width:130px;border-radius:10px;font-size:.8rem" onchange="loadLoans()">
+      <option value="">Tous les statuts</option>
+      <option value="soumise">Soumise</option>
+      <option value="en_analyse">En analyse</option>
+      <option value="approuvee">Approuvée</option>
+      <option value="decaissée">Décaissée</option>
+      <option value="rejetee">Rejetée</option>
+    </select>
+    <input class="form-control form-control-sm" id="filter-search" placeholder="Rechercher..." style="min-width:0;width:100%;border-radius:10px;font-size:.8rem" oninput="debounceSearch()">
+  </div>
+</div>
+
+<div class="card-dashboard">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-cof mb-0">
+        <thead><tr><th class="d-none d-md-table-cell">ID</th><th>Client</th><th>Montant</th><th class="d-none d-md-table-cell">Durée</th><th class="d-none d-md-table-cell">Score</th><th>Statut</th><th class="d-none d-md-table-cell">Date</th><th style="width:80px"></th></tr></thead>
+        <tbody id="loans-table-body"><tr><td colspan="8" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm" role="status"></div> Chargement...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<nav class="mt-3" id="loans-pagination" style="display:none"><ul class="pagination pagination-sm justify-content-center"></ul></nav>
+
+<div class="modal fade" id="createLoanModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;border:none">
+      <div class="modal-header" style="border-bottom:1px solid #F1F5F9">
+        <h5 class="modal-title fw-bold">Nouvelle demande de crédit</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="create-loan-form">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Montant (FCFA)</label>
+            <input type="number" class="form-control" id="loan-amount" min="10000" step="1000" required placeholder="Ex: 250000">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Objet du crédit</label>
+            <textarea class="form-control" id="loan-purpose" rows="2" required placeholder="Décrivez l'objet de votre demande"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Durée (mois)</label>
+            <select class="form-select" id="loan-duration">
+              <option value="3">3 mois</option>
+              <option value="6" selected>6 mois</option>
+              <option value="12">12 mois</option>
+              <option value="24">24 mois</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-cof w-100" id="create-loan-btn">Soumettre la demande</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let searchTimeout = null;
+  function debounceSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(loadLoans, 300); }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!isLoggedIn()) return;
+    await loadUser();
+    if (!currentUser) return;
+    loadLoans();
+    document.getElementById('create-loan-form').addEventListener('submit', handleCreateLoan);
+  });
+
+  async function loadLoans() {
+    const status = document.getElementById('filter-status').value;
+    const search = document.getElementById('filter-search').value;
+    let url = 'loans/';
+    const params = [];
+    if (status) params.push('status=' + status);
+    if (search) params.push('search=' + encodeURIComponent(search));
+    if (params.length) url += '?' + params.join('&');
+    try {
+      const data = await apiFetchJSON(url);
+      const loans = getResults(data) || [];
+      const tbody = document.getElementById('loans-table-body');
+      if (loans.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5">Aucun prêt trouvé</td></tr>'; return; }
+      tbody.innerHTML = loans.map(l => `
+        <tr>
+          <td class="d-none d-md-table-cell" style="font-weight:600;color:var(--primary)">#${l.id}</td>
+          <td style="font-weight:600">${l.client_name || '—'}</td>
+          <td style="font-weight:600">${formatCurrency(l.amount)}</td>
+          <td class="d-none d-md-table-cell">${l.duration_months} mois</td>
+          <td class="d-none d-md-table-cell">${l.eligibility_score != null ? '<span class="badge bg-' + (l.eligibility_score >= 75 ? 'success' : l.eligibility_score >= 50 ? 'warning' : 'danger') + '">' + l.eligibility_score + '</span>' : '—'}</td>
+          <td>${statusBadge(l.status)}</td>
+          <td class="d-none d-md-table-cell" style="font-size:.8rem;color:#64748B">${formatDate(l.created_at)}</td>
+          <td><a href="/loans/${l.id}/" class="btn btn-sm btn-cof-outline">Détail</a></td>
+        </tr>
+      `).join('');
+      if (data && data.count > 25) renderPagination(data);
+      else document.getElementById('loans-pagination').style.display = 'none';
+    } catch(e) { document.getElementById('loans-table-body').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-5">Erreur de chargement</td></tr>'; }
+  }
+
+  function renderPagination(data) {
+    const nav = document.getElementById('loans-pagination');
+    nav.style.display = '';
+    const ul = nav.querySelector('ul');
+    const total = Math.ceil(data.count / 25);
+    const current = data.current_page || 1;
+    ul.innerHTML = '';
+    for (let i = 1; i <= total && i <= 10; i++) {
+      const li = document.createElement('li');
+      li.className = 'page-item' + (i === current ? ' active' : '');
+      li.innerHTML = `<a class="page-link" href="#" onclick="event.preventDefault();loadPage(${i})">${i}</a>`;
+      ul.appendChild(li);
+    }
+  }
+
+  async function loadPage(page) {
+    const data = await apiFetchJSON('loans/?page=' + page);
+    if (data) renderPageData(data);
+  }
+
+  async function handleCreateLoan(e) {
+    e.preventDefault();
+    const btn = document.getElementById('create-loan-btn');
+    btn.disabled = true; btn.textContent = 'Envoi en cours...';
+    try {
+      const res = await apiFetch('loans/', {
+        method: 'POST',
+        body: JSON.stringify({
+          amount: document.getElementById('loan-amount').value,
+          purpose: document.getElementById('loan-purpose').value,
+          duration_months: parseInt(document.getElementById('loan-duration').value),
+        }),
+      });
+      if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('createLoanModal')).hide();
+        showToast('Demande de crédit soumise avec succès !');
+        loadLoans();
+        document.getElementById('create-loan-form').reset();
+      } else {
+        const err = await res.json();
+        showToast(Object.values(err).flat().join(', ') || 'Erreur lors de la création', 'danger');
+      }
+    } catch(e) { showToast('Erreur serveur', 'danger'); }
+    btn.disabled = false; btn.textContent = 'Soumettre la demande';
+  }
+</script>
+{% endblock %}

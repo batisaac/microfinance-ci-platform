@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Assurance{% endblock %}
+{% block page_title %}Assurance mobile{% endblock %}
+{% block extra_css %}
+<style>
+  @media (max-width: 576px) {
+    .insurance-product { padding: 1rem !important; }
+    .insurance-product .product-icon { width: 36px; height: 36px; font-size: 1.1rem; }
+    .insurance-product h6 { font-size: .9rem; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<script>window._currentPage = 'insurance';</script>
+
+<div class="row g-3 g-md-4 mb-3 mb-md-4" id="plans-section">
+  <div class="col-12">
+    <h5 style="font-weight:700;color:#0F172A;margin-bottom:.75rem;font-size:1rem"><i class="bi bi-box-seam me-2" style="color:var(--primary)"></i> Produits disponibles</h5>
+  </div>
+  <div id="plans-container" class="row g-3 g-md-4">
+    <div class="col-12 text-center text-muted py-5"><div class="spinner-border spinner-border-sm" role="status"></div> Chargement...</div>
+  </div>
+</div>
+
+<div class="card-dashboard mt-3 mt-md-4">
+  <div class="card-header d-flex justify-content-between align-items-center" style="padding:1rem 1.25rem">
+    <span style="font-size:.9rem">Mes souscriptions</span>
+    <button class="btn btn-sm btn-cof" data-bs-toggle="modal" data-bs-target="#subscribeModal"><i class="bi bi-plus-lg"></i> Souscrire</button>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-cof mb-0">
+        <thead><tr><th>Produit</th><th class="d-none d-sm-table-cell">Début</th><th class="d-none d-sm-table-cell">Fin</th><th>Prime</th><th>Statut</th><th class="d-none d-sm-table-cell">Expiration</th></tr></thead>
+        <tbody id="policies-body"><tr><td colspan="6" class="text-center text-muted py-4">Chargement...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="subscribeModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;border:none">
+      <div class="modal-header" style="border-bottom:1px solid #F1F5F9">
+        <h5 class="modal-title fw-bold">Souscrire à une assurance</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="subscribe-form">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Produit</label>
+            <select class="form-select" id="sub-plan" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Date de début</label>
+            <input type="date" class="form-control" id="sub-start" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Durée (mois)</label>
+            <select class="form-select" id="sub-duration">
+              <option value="1">1 mois</option>
+              <option value="3">3 mois</option>
+              <option value="6" selected>6 mois</option>
+              <option value="12">12 mois</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-cof w-100" id="sub-btn">Souscrire</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!isLoggedIn()) return;
+    await loadUser();
+    if (!currentUser) return;
+    loadPlans();
+    loadPolicies();
+    document.getElementById('subscribe-form').addEventListener('submit', handleSubscribe);
+  });
+
+  async function loadPlans() {
+    try {
+      const data = await apiFetchJSON('insurance/plans/');
+      const plans = getResults(data) || [];
+      const container = document.getElementById('plans-container');
+      if (plans.length === 0) { container.innerHTML = '<div class="col-12 text-center text-muted py-4">Aucun produit disponible</div>'; return; }
+      container.innerHTML = plans.map(p => `
+        <div class="col-md-6 col-lg-4">
+          <div class="card-dashboard insurance-product" style="padding:1.5rem;height:100%">
+            <div class="product-icon" style="width:48px;height:48px;border-radius:12px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:1.5rem;margin-bottom:1rem"><i class="bi bi-shield-check"></i></div>
+            <h6 style="font-weight:700;color:#0F172A">${p.name}</h6>
+            <p style="font-size:.8rem;color:#64748B;margin-bottom:1rem">${p.description}</p>
+            <div class="d-flex justify-content-between align-items-center">
+              <div><span style="font-size:1.25rem;font-weight:700;color:#0F172A">${formatCurrency(p.monthly_premium)}</span><span style="font-size:.75rem;color:#64748B">/mois</span></div>
+              <div style="text-align:right"><span style="font-size:.75rem;color:#64748B">Plafond</span><br><span style="font-weight:600;font-size:.9rem">${formatCurrency(p.coverage_amount)}</span></div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      const select = document.getElementById('sub-plan');
+      select.innerHTML = plans.map(p => `<option value="${p.id}">${p.name} — ${formatCurrency(p.monthly_premium)}/mois</option>`).join('');
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('sub-start').value = today;
+      document.getElementById('sub-start').min = today;
+    } catch(e) { document.getElementById('plans-container').innerHTML = '<div class="col-12 text-center text-danger py-4">Erreur de chargement</div>'; }
+  }
+
+  async function loadPolicies() {
+    try {
+      const data = await apiFetchJSON('insurance/my-policies/');
+      const policies = getResults(data) || [];
+      const tbody = document.getElementById('policies-body');
+      if (policies.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Aucune souscription</td></tr>'; return; }
+      tbody.innerHTML = policies.map(p => `
+        <tr>
+          <td style="font-weight:600">${p.plan_name}</td>
+          <td class="d-none d-sm-table-cell">${formatDate(p.start_date)}</td>
+          <td class="d-none d-sm-table-cell">${formatDate(p.end_date)}</td>
+          <td style="font-weight:600">${formatCurrency(p.premium)}</td>
+          <td>${statusBadge(p.status)}</td>
+          <td class="d-none d-sm-table-cell">${p.status === 'active' && new Date(p.end_date) - new Date() < 15*86400000 ? '<span class="badge bg-warning text-dark">Expire bientôt</span>' : '—'}</td>
+        </tr>
+      `).join('');
+    } catch(e) { document.getElementById('policies-body').innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Erreur</td></tr>'; }
+  }
+
+  async function handleSubscribe(e) {
+    e.preventDefault();
+    const btn = document.getElementById('sub-btn');
+    btn.disabled = true; btn.textContent = 'Souscription en cours...';
+    try {
+      const res = await apiFetch('insurance/subscribe/', {
+        method: 'POST',
+        body: JSON.stringify({
+          plan: parseInt(document.getElementById('sub-plan').value),
+          start_date: document.getElementById('sub-start').value,
+          duration_months: parseInt(document.getElementById('sub-duration').value),
+        }),
+      });
+      if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('subscribeModal')).hide();
+        showToast('Souscription effectuée avec succès !');
+        loadPolicies();
+      } else {
+        const err = await res.json();
+        showToast(Object.values(err).flat().join(', ') || 'Erreur', 'danger');
+      }
+    } catch(e) { showToast('Erreur serveur', 'danger'); }
+    btn.disabled = false; btn.textContent = 'Souscrire';
+  }
+</script>
+{% endblock %}

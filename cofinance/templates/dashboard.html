@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord{% endblock %}
+{% block page_title %}Tableau de bord{% endblock %}
+{% block extra_css %}
+<style>
+  @media (max-width: 576px) {
+    .stat-card { padding: 1rem; }
+    .stat-card .value { font-size: 1.35rem; }
+    .stat-card .icon { width: 36px; height: 36px; font-size: 1.1rem; }
+    .recovery-container { width: 140px !important; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<script>window._currentPage = 'dashboard';</script>
+<div class="row g-3 g-md-4 mb-3 mb-md-4" id="stats-row">
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card">
+      <div class="icon" style="background:#EEF2FF;color:#1E3A8A"><i class="bi bi-cash-stack"></i></div>
+      <div class="label">Total prêts</div>
+      <div class="value" id="stat-total">—</div>
+      <div class="change text-muted">Tous statuts confondus</div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card">
+      <div class="icon" style="background:#ECFDF5;color:#10B981"><i class="bi bi-check-circle"></i></div>
+      <div class="label">Prêts actifs</div>
+      <div class="value" id="stat-active">—</div>
+      <div class="change text-muted">Décaissés en cours</div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card">
+      <div class="icon" style="background:#FEF3C7;color:#F59E0B"><i class="bi bi-arrow-return-left"></i></div>
+      <div class="label">Taux de recouvrement</div>
+      <div class="value" id="stat-recovery">—</div>
+      <div class="change text-muted">Global</div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card">
+      <div class="icon" style="background:#F3E8FF;color:#8B5CF6"><i class="bi bi-shield-check"></i></div>
+      <div class="label">Souscriptions actives</div>
+      <div class="value" id="stat-insurance">—</div>
+      <div class="change text-muted">Assurance</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-8">
+    <div class="card-dashboard">
+      <div class="card-header">Volume des prêts par statut</div>
+      <div class="card-body" style="padding:1.5rem">
+        <canvas id="statusChart" height="250"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card-dashboard">
+      <div class="card-header">Aperçu du recouvrement</div>
+      <div class="card-body" style="padding:1.5rem;text-align:center">
+        <div class="recovery-container" style="position:relative;width:180px;margin:0 auto">
+          <canvas id="recoveryChart" height="180" width="180"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+            <div style="font-size:2rem;font-weight:800;color:#0F172A" id="recovery-pct">0%</div>
+            <div style="font-size:.65rem;color:#64748B">recouvré</div>
+          </div>
+        </div>
+        <div style="margin-top:1rem;display:flex;justify-content:center;gap:1.5rem;font-size:.8rem">
+          <div><span style="color:#10B981;font-weight:700" id="recovery-collected">0</span> FCFA perçu</div>
+          <div><span style="color:#1E3A8A;font-weight:700" id="recovery-expected">0</span> FCFA attendu</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card-dashboard">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Derniers prêts</span>
+        <a href="/loans/" class="btn btn-sm btn-cof-outline">Voir tout</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-cof mb-0">
+          <thead><tr><th>Client</th><th>Montant</th><th>Statut</th><th class="d-none d-sm-table-cell">Date</th></tr></thead>
+          <tbody id="recent-loans"><tr><td colspan="4" class="text-center text-muted py-4">Chargement...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card-dashboard">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Dernières notifications</span>
+        <a href="/notifications/" class="btn btn-sm btn-cof-outline">Voir tout</a>
+      </div>
+      <div class="card-body p-0">
+        <div id="recent-notifs" style="padding:1rem">
+          <div class="text-center text-muted py-4">Chargement...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let statusChartInstance = null;
+  let recoveryChartInstance = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!isLoggedIn()) return;
+    const user = await loadUser();
+    if (!user) return;
+
+    if (user.role === 'admin') {
+      loadDashboardAdmin();
+    } else {
+      loadDashboardClient(user);
+    }
+    loadRecentLoans(user);
+    loadRecentNotifs();
+  });
+
+  async function loadDashboardAdmin() {
+    try {
+      const data = await apiFetchJSON('dashboard/');
+      if (!data) return;
+      const vol = data.volume_par_statut || {};
+      const total = Object.values(vol).reduce((a,b) => a+b, 0);
+      const active = (vol['decaissée'] || 0) + (vol['approuvee'] || 0);
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-active').textContent = active;
+      document.getElementById('stat-recovery').textContent = data.taux_recouvrement != null ? data.taux_recouvrement + '%' : '—';
+      document.getElementById('stat-insurance').textContent = data.souscriptions_actives ?? '—';
+      renderStatusChart(vol);
+      renderRecoveryChart(data.taux_recouvrement || 0);
+      if (data.taux_recouvrement != null) document.getElementById('recovery-pct').textContent = data.taux_recouvrement + '%';
+    } catch(e) { console.error(e); }
+  }
+
+  async function loadDashboardClient(user) {
+    document.getElementById('stat-recovery').textContent = '—';
+    document.getElementById('stat-insurance').textContent = '—';
+    try {
+      const loans = await apiFetchJSON('loans/');
+      const results = getResults(loans) || [];
+      document.getElementById('stat-total').textContent = results.length;
+      document.getElementById('stat-active').textContent = results.filter(l => l.status === 'decaissée' || l.status === 'approuvee').length;
+      const vol = {};
+      results.forEach(l => { vol[l.status] = (vol[l.status] || 0) + 1; });
+      renderStatusChart(vol);
+    } catch(e) { console.error(e); }
+  }
+
+  function renderStatusChart(vol) {
+    const labels = { 'soumise':'Soumise','en_analyse':'En analyse','approuvee':'Approuvée','decaissée':'Décaissée','rejetee':'Rejetée' };
+    const colors = ['#F59E0B','#3B82F6','#10B981','#1E3A8A','#EF4444'];
+    const keys = Object.keys(labels);
+    const vals = keys.map(k => vol[k] || 0);
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    if (statusChartInstance) statusChartInstance.destroy();
+    statusChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: keys.map(k => labels[k]),
+        datasets: [{ label: 'Nombre de prêts', data: vals, backgroundColor: colors, borderRadius: 8, borderSkipped: false }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } }, x: { grid: { display: false } } }
+      }
+    });
+  }
+
+  function renderRecoveryChart(pct) {
+    const ctx = document.getElementById('recoveryChart').getContext('2d');
+    if (recoveryChartInstance) recoveryChartInstance.destroy();
+    recoveryChartInstance = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Recouvré', 'Restant'],
+        datasets: [{ data: [pct, 100 - pct], backgroundColor: ['#10B981', '#E2E8F0'], borderWidth: 0 }]
+      },
+      options: { responsive: true, maintainAspectRatio: true, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }
+    });
+  }
+
+  async function loadRecentLoans(user) {
+    try {
+      const data = await apiFetchJSON('loans/?page_size=5');
+      const loans = getResults(data) || [];
+      const tbody = document.getElementById('recent-loans');
+      if (loans.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">Aucun prêt</td></tr>'; return; }
+      tbody.innerHTML = loans.map(l => `
+        <tr><td><a href="/loans/${l.id}/" style="color:var(--primary);text-decoration:none;font-weight:600">${l.client_name || '—'}</a></td>
+        <td>${formatCurrency(l.amount)}</td><td>${statusBadge(l.status)}</td>
+        <td class="d-none d-sm-table-cell" style="font-size:.8rem;color:#64748B">${formatDate(l.created_at)}</td></tr>
+      `).join('');
+    } catch(e) { document.getElementById('recent-loans').innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">Erreur de chargement</td></tr>'; }
+  }
+
+  async function loadRecentNotifs() {
+    try {
+      const data = await apiFetchJSON('notifications/?page_size=5');
+      const notifs = getResults(data) || [];
+      const container = document.getElementById('recent-notifs');
+      if (notifs.length === 0) { container.innerHTML = '<div class="text-center text-muted py-3">Aucune notification</div>'; return; }
+      const icons = { 'loan_status':'bi-cash-stack','repayment':'bi-arrow-return-left','insurance':'bi-shield-check','system':'bi-gear' };
+      const colors = { 'loan_status':'#1E3A8A','repayment':'#10B981','insurance':'#8B5CF6','system':'#64748B' };
+      container.innerHTML = notifs.map(n => `
+        <div class="notif-item" style="display:flex;align-items:start;gap:.75rem;padding:.75rem 0;border-bottom:1px solid #F1F5F9">
+          <div class="notif-icon" style="width:32px;height:32px;border-radius:8px;background:${colors[n.type] || '#64748B'}15;display:flex;align-items:center;justify-content:center;color:${colors[n.type] || '#64748B'};flex-shrink:0"><i class="bi ${icons[n.type] || 'bi-bell'}"></i></div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:.85rem;color:#0F172A">${n.title}</div>
+          <div style="font-size:.8rem;color:#64748B;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${n.body}</div>
+          <div style="font-size:.7rem;color:#94A3B8;margin-top:.15rem">${formatDateTime(n.created_at)}</div></div>
+          ${n.is_read ? '' : '<span class="badge bg-primary rounded-pill" style="font-size:.5rem;flex-shrink:0">Nouveau</span>'}
+        </div>
+      `).join('');
+    } catch(e) { document.getElementById('recent-notifs').innerHTML = '<div class="text-center text-muted py-3">Erreur</div>'; }
+  }
+</script>
+{% endblock %}

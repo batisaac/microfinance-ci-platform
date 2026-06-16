@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Détail du prêt{% endblock %}
+{% block page_title %}Détail du prêt #<span id="loan-id-display">—</span>{% endblock %}
+{% block extra_css %}
+<style>
+  @media (max-width: 576px) {
+    #loan-info .row .col-6 { width: 100%; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<script>window._currentPage = 'loans';</script>
+
+<div class="row g-4" id="loan-detail-root">
+  <div class="col-lg-4">
+    <div class="card-dashboard">
+      <div class="card-header">Informations générales</div>
+      <div class="card-body" id="loan-info" style="padding:1.5rem">
+        <div class="text-center text-muted py-4">Chargement...</div>
+      </div>
+    </div>
+    <div class="card-dashboard mt-4">
+      <div class="card-header">Score d'éligibilité</div>
+      <div class="card-body text-center" style="padding:2rem" id="loan-score-container">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card-dashboard">
+      <div class="card-header">Échéancier de remboursement</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-cof mb-0">
+            <thead><tr><th class="d-none d-sm-table-cell">#</th><th>Date d'échéance</th><th>Montant</th><th class="d-none d-sm-table-cell">Payé</th><th>Statut</th></tr></thead>
+            <tbody id="schedule-body"><tr><td colspan="5" class="text-center text-muted py-4">Chargement...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="card-dashboard mt-4">
+      <div class="card-header">Actions</div>
+      <div class="card-body" id="loan-actions" style="padding:1.5rem">
+        <div class="text-center text-muted py-2">Chargement...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let loanId = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!isLoggedIn()) return;
+    await loadUser();
+    if (!currentUser) return;
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    loanId = parts[parts.length - 1];
+    if (!loanId || isNaN(loanId)) { window.location.href = '/loans/'; return; }
+    document.getElementById('loan-id-display').textContent = loanId;
+    loadLoanDetail();
+  });
+
+  async function loadLoanDetail() {
+    try {
+      const loan = await apiFetchJSON('loans/' + loanId + '/');
+      if (!loan) { document.getElementById('loan-detail-root').innerHTML = '<div class="alert alert-danger">Prêt introuvable</div>'; return; }
+      document.getElementById('loan-id-display').textContent = loan.id;
+      renderLoanInfo(loan);
+      renderScore(loan);
+      renderSchedule(loan.schedule || []);
+      renderActions(loan);
+    } catch(e) { document.getElementById('loan-detail-root').innerHTML = '<div class="alert alert-danger">Erreur de chargement</div>'; }
+  }
+
+  function renderLoanInfo(loan) {
+    document.getElementById('loan-info').innerHTML = `
+      <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #F1F5F9">
+        <div style="font-size:.75rem;color:#64748B">Client</div>
+        <div style="font-weight:600;font-size:1.1rem">${loan.client_name}</div>
+      </div>
+      <div class="row g-3">
+        <div class="col-6"><div style="font-size:.75rem;color:#64748B">Montant</div><div style="font-weight:700;font-size:1.25rem;color:#0F172A">${formatCurrency(loan.amount)}</div></div>
+        <div class="col-6"><div style="font-size:.75rem;color:#64748B">Statut</div><div>${statusBadge(loan.status)}</div></div>
+        <div class="col-6"><div style="font-size:.75rem;color:#64748B">Taux mensuel</div><div style="font-weight:600">${loan.interest_rate}%</div></div>
+        <div class="col-6"><div style="font-size:.75rem;color:#64748B">Durée</div><div style="font-weight:600">${loan.duration_months} mois</div></div>
+        <div class="col-6"><div style="font-size:.75rem;color:#64748B">Mensualité</div><div style="font-weight:600">${loan.monthly_payment ? formatCurrency(loan.monthly_payment) : '—'}</div></div>
+        <div class="col-6"><div style="font-size:.75rem;color:#64748B">Créé le</div><div style="font-weight:600;font-size:.85rem">${formatDate(loan.created_at)}</div></div>
+      </div>
+      ${loan.purpose ? `<div class="mt-3 pt-3 border-top"><div style="font-size:.75rem;color:#64748B">Objet</div><div style="font-size:.9rem">${loan.purpose}</div></div>` : ''}
+      ${loan.agent_notes ? `<div class="mt-3 pt-3 border-top"><div style="font-size:.75rem;color:#64748B">Notes agent</div><div style="font-size:.85rem;color:#64748B">${loan.agent_notes}</div></div>` : ''}
+    `;
+  }
+
+  function renderScore(loan) {
+    const score = loan.eligibility_score;
+    if (score == null) { document.getElementById('loan-score-container').innerHTML = '<div style="color:#94A3B8">Non calculé</div>'; return; }
+    const color = score >= 75 ? '#10B981' : score >= 50 ? '#F59E0B' : '#EF4444';
+    const label = score >= 75 ? 'Excellent' : score >= 50 ? 'Moyen' : 'Faible';
+    document.getElementById('loan-score-container').innerHTML = `
+      <div style="position:relative;width:120px;height:120px;margin:0 auto">
+        <canvas id="scoreChart"></canvas>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+          <div style="font-size:2rem;font-weight:800;color:${color}">${score}</div>
+          <div style="font-size:.65rem;color:#64748B">/100</div>
+        </div>
+      </div>
+      <div style="margin-top:.75rem;font-weight:600;color:${color}">${label}</div>
+    `;
+    const ctx = document.getElementById('scoreChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels: ['Score', 'Restant'], datasets: [{ data: [score, 100 - score], backgroundColor: [color, '#E2E8F0'], borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: true, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }
+    });
+  }
+
+  function renderSchedule(schedule) {
+    const tbody = document.getElementById('schedule-body');
+    if (!schedule || schedule.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Aucun échéancier généré</td></tr>'; return; }
+    tbody.innerHTML = schedule.map(s => `
+      <tr>
+        <td class="d-none d-sm-table-cell" style="font-weight:600">${s.installment_number}</td>
+        <td>${formatDate(s.due_date)}</td>
+        <td style="font-weight:600">${formatCurrency(s.amount)}</td>
+        <td class="d-none d-sm-table-cell">${s.paid_amount ? formatCurrency(s.paid_amount) : '—'}</td>
+        <td>${statusBadge(s.status)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderActions(loan) {
+    const container = document.getElementById('loan-actions');
+    if (currentUser.role === 'client') {
+      container.innerHTML = '<p class="text-muted mb-0" style="font-size:.85rem">Le statut de votre demande est mis à jour par nos équipes. Vous recevrez une notification à chaque changement.</p>';
+      return;
+    }
+    if (!['admin', 'agent'].includes(currentUser.role)) { container.innerHTML = ''; return; }
+    const transitions = {
+      'soumise': [{ value: 'en_analyse', label: 'Passer en analyse', class: 'btn-info' }, { value: 'rejetee', label: 'Rejeter', class: 'btn-danger' }],
+      'en_analyse': [{ value: 'approuvee', label: 'Approuver', class: 'btn-success' }, { value: 'rejetee', label: 'Rejeter', class: 'btn-danger' }],
+      'approuvee': [{ value: 'decaissée', label: 'Marquer décaissé', class: 'btn-primary' }],
+    };
+    const actions = transitions[loan.status];
+    if (!actions) { container.innerHTML = '<p class="text-muted mb-0" style="font-size:.85rem">Aucune action disponible pour ce statut.</p>'; return; }
+    container.innerHTML = '<div class="d-flex gap-2 flex-wrap">' + actions.map(a =>
+      `<button class="btn ${a.class} btn-sm" onclick="updateLoanStatus('${a.value}')">${a.label}</button>`
+    ).join('') + '</div>';
+  }
+
+  async function updateLoanStatus(newStatus) {
+    try {
+      const res = await apiFetch('loans/' + loanId + '/status/', { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+      if (res.ok) {
+        showToast('Statut mis à jour avec succès');
+        loadLoanDetail();
+      } else {
+        const err = await res.json();
+        showToast(err.detail || 'Erreur de mise à jour', 'danger');
+      }
+    } catch(e) { showToast('Erreur serveur', 'danger'); }
+  }
+</script>
+{% endblock %}

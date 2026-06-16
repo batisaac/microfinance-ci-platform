@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+{% block content %}
+<script>window._currentPage = 'notifications';</script>
+
+<div class="d-flex flex-wrap gap-2 mb-4 align-items-center">
+  <div class="btn-group" role="group">
+    <input type="radio" class="btn-check" name="notif-filter" id="nf-all" value="" checked onchange="loadNotifs()">
+    <label class="btn btn-outline-secondary btn-sm" for="nf-all" style="border-radius:10px 0 0 10px">Toutes</label>
+    <input type="radio" class="btn-check" name="notif-filter" id="nf-unread" value="true" onchange="loadNotifs()">
+    <label class="btn btn-outline-secondary btn-sm" for="nf-unread" style="border-radius:0 10px 10px 0">Non lues</label>
+  </div>
+  <button class="btn btn-sm btn-cof-outline ms-auto" onclick="markAllRead()"><i class="bi bi-check2-all"></i> Tout marquer lu</button>
+</div>
+
+<div class="card-dashboard">
+  <div class="card-body p-0" id="notifications-container">
+    <div class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm" role="status"></div> Chargement...</div>
+  </div>
+</div>
+
+<nav class="mt-3" id="notif-pagination" style="display:none"><ul class="pagination pagination-sm justify-content-center"></ul></nav>
+
+<script>
+  let allNotifs = [];
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!isLoggedIn()) return;
+    await loadUser();
+    if (!currentUser) return;
+    loadNotifs();
+  });
+
+  async function loadNotifs() {
+    const unread = document.querySelector('input[name="notif-filter"]:checked')?.value || '';
+    let url = 'notifications/';
+    if (unread) url += '?unread=true';
+    try {
+      const data = await apiFetchJSON(url);
+      const notifs = getResults(data) || [];
+      allNotifs = notifs;
+      const container = document.getElementById('notifications-container');
+      if (notifs.length === 0) { container.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:.5rem"></i>Aucune notification</div>'; return; }
+      const icons = { 'loan_status': 'bi-cash-stack', 'repayment': 'bi-arrow-return-left', 'insurance': 'bi-shield-check', 'system': 'bi-gear' };
+      const iconColors = { 'loan_status': '#1E3A8A', 'repayment': '#10B981', 'insurance': '#8B5CF6', 'system': '#64748B' };
+      container.innerHTML = '<div style="padding:.5rem 0">' + notifs.map(n => `
+        <div style="display:flex;align-items:start;gap:1rem;padding:1rem 1.5rem;border-bottom:1px solid #F1F5F9;${n.is_read ? '' : 'background:#F8FAFC'}" data-id="${n.id}">
+          <div style="width:40px;height:40px;border-radius:10px;background:${iconColors[n.type] || '#64748B'}15;display:flex;align-items:center;justify-content:center;color:${iconColors[n.type] || '#64748B'};font-size:1.1rem;flex-shrink:0"><i class="bi ${icons[n.type] || 'bi-bell'}"></i></div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="font-weight:${n.is_read ? '500' : '700'};color:#0F172A;font-size:.9rem">${n.title}</div>
+              <div style="font-size:.7rem;color:#94A3B8">${formatDateTime(n.created_at)}</div>
+            </div>
+            <div style="font-size:.85rem;color:#64748B;margin-top:.15rem">${n.body}</div>
+          </div>
+          <div style="flex-shrink:0">
+            ${n.is_read ? '' : `<button class="btn btn-sm btn-outline-primary" style="border-radius:8px;font-size:.75rem" onclick="markRead(${n.id})"><i class="bi bi-check2"></i></button>`}
+          </div>
+        </div>
+      `).join('') + '</div>';
+      if (data && data.count && data.count > 25) {
+        const nav = document.getElementById('notif-pagination');
+        nav.style.display = '';
+        const total = Math.ceil(data.count / 25);
+        nav.querySelector('ul').innerHTML = Array.from({length: Math.min(total, 10)}, (_, i) =>
+          `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault();loadNotifPage(${i+1})">${i+1}</a></li>`
+        ).join('');
+      } else { document.getElementById('notif-pagination').style.display = 'none'; }
+    } catch(e) { document.getElementById('notifications-container').innerHTML = '<div class="text-center text-danger py-5">Erreur de chargement</div>'; }
+  }
+
+  async function markRead(id) {
+    try {
+      const res = await apiFetch('notifications/' + id + '/read/', { method: 'PATCH', body: JSON.stringify({ is_read: true }) });
+      if (res.ok) { loadNotifs(); loadNotifCount(); }
+    } catch(e) {}
+  }
+
+  async function markAllRead() {
+    const unread = allNotifs.filter(n => !n.is_read);
+    for (const n of unread) { await apiFetch('notifications/' + n.id + '/read/', { method: 'PATCH', body: JSON.stringify({ is_read: true }) }); }
+    showToast(unread.length + ' notification(s) marquée(s) comme lue(s)');
+    loadNotifs();
+    loadNotifCount();
+  }
+</script>
+{% endblock %}
