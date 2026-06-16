@@ -4,7 +4,7 @@
 
 Plateforme Django de microfinance numérique (prêts, assurance mobile, chat support temps réel).
 
-- **Backend** : Django 6.0 + DRF 3.17
+- **Backend** : Django 5.2.15 + DRF 3.17
 - **Auth** : JWT (simplejwt 5.5, access 2h / refresh 7j, rotation + blacklist)
 - **WebSocket** : Channels 4.3 + Daphne 4.2 (chat temps réel)
 - **Base de données** : SQLite (dev), PostgreSQL (prod via `DATABASE_URL`)
@@ -16,35 +16,43 @@ Plateforme Django de microfinance numérique (prêts, assurance mobile, chat sup
 ## Structure des dossiers
 
 ```
-cofinance/
-├── .env / .env.example         # Variables d'environnement
-├── manage.py
-├── requirements.txt
-├── db.sqlite3                  # Base dev
-├── templates/                  # 8 templates HTML
-│   ├── base.html              # Layout principal (502 lignes)
-│   ├── login.html             # Page connexion standalone
-│   ├── dashboard.html         # Tableau de bord
-│   ├── loans_list.html        # Liste des prêts
-│   ├── loan_detail.html       # Détail d'un prêt + graphique
-│   ├── insurance_list.html    # Assurance
-│   ├── notifications.html     # Notifications
-│   └── chat.html              # Chat support WebSocket
-├── config/
-│   ├── asgi.py                # Point d'entrée ASGI (HTTP + WS)
+microfinance-ci-platform/           # Racine du dépôt = racine Django
+├── .env.example                    # Template variables d'environnement
+├── .gitignore                      # Un seul .gitignore à la racine
+├── HANDOFF.md                      # Document de passation
+├── manage.py                       # Point d'entrée Django
+├── pytest.ini                      # Configuration pytest
+├── README.md                       # Documentation projet
+├── requirements.txt                # Dépendances Python
+├── apps/                           # Applications Django
+│   ├── accounts/                  # Utilisateurs & auth JWT
+│   ├── credits/                   # Gestion des prêts
+│   ├── repayments/                # Remboursements
+│   ├── insurance/                 # Assurance mobile
+│   ├── notifications/             # Notifications (signaux + REST)
+│   ├── chat/                      # Chat support (WebSocket + REST)
+│   ├── dashboard/                 # KPIs admin
+│   └── frontend/                  # Vues template + seed_db
+├── config/                         # Configuration Django
+│   ├── asgi.py                    # Point d'entrée ASGI (HTTP + WS)
 │   ├── wsgi.py
-│   ├── urls.py                # Routage racine
+│   ├── urls.py                    # Routage racine
 │   └── settings/
-│       └── base.py            # Configuration principale
-└── apps/
-    ├── accounts/              # Utilisateurs & auth JWT
-    ├── credits/               # Gestion des prêts
-    ├── repayments/            # Remboursements
-    ├── insurance/             # Assurance mobile
-    ├── notifications/         # Notifications (signaux + REST)
-    ├── chat/                  # Chat support (WebSocket + REST)
-    ├── dashboard/             # KPIs admin
-    └── frontend/              # Vues template + seed_db
+│       └── base.py                # Configuration principale
+├── docs/                           # Documentation
+│   └── .gitkeep
+├── media/                          # Uploads utilisateurs (.gitkeep)
+├── static/                         # Fichiers statiques source (.gitkeep)
+├── staticfiles/                    # Collectstatic (.gitkeep)
+└── templates/                      # 8 templates HTML
+    ├── base.html                  # Layout principal (502 lignes)
+    ├── login.html                 # Page connexion standalone
+    ├── dashboard.html             # Tableau de bord
+    ├── loans_list.html            # Liste des prêts
+    ├── loan_detail.html           # Détail d'un prêt + graphique
+    ├── insurance_list.html        # Assurance
+    ├── notifications.html         # Notifications
+    └── chat.html                  # Chat support WebSocket
 ```
 
 ---
@@ -209,9 +217,10 @@ psycopg2-binary>=2.9, Pillow>=10.0
 ## Commandes utiles
 
 ```bash
-# Lancer le serveur (WebSocket support)
-cd cofinance
+# Activer l'environnement
 .venv\Scripts\activate
+
+# Lancer le serveur (WebSocket support)
 daphne -p 8000 config.asgi:application
 
 # OU en dev (sans WebSocket)
@@ -220,14 +229,14 @@ python manage.py runserver
 # Seed base de démo
 python manage.py seed_db
 
-# Tests
-python -m pytest
+# Tests (85 tests, découvrables automatiquement)
+python -m pytest -v
 
 # Collection statique
 python manage.py collectstatic
 
 # Documentation API
-# Aller sur http://localhost:8000/api/docs/
+# http://localhost:8000/api/docs/
 ```
 
 ---
@@ -244,9 +253,14 @@ python manage.py collectstatic
 
 ## Dernières corrections appliquées
 
-1. **Chart.js** : v4.4.4 avait une erreur TLD → passé à v3.9.1 via jsdelivr
-2. **Chat navigation** : `classList.toggle` → `classList.add` (bug second clic)
-3. **Chat badge non-lus** : ajout `mark_read` WebSocket à l'ouverture et à réception message
-4. **Chat crash null** : `chatLoading` détruit par `loadMessages` → recréé à chaque `openConversation`
-5. **Favicon** : inline SVG + route Django (`/favicon.ico`)
-6. **Login** : page standalone (pas d'extension base.html) pour éviter cache CSS `.main-content`
+1. **Structure aplatie** : projet sorti du sous-dossier `cofinance/` → `manage.py`, `apps/`, `config/` à la racine du dépôt (structure idéale)
+2. **.gitignore unique** : supprimé le doublon `cofinance/.gitignore`, gardé le plus complet à la racine
+3. **.gitkeep corrigés** : `docs.gitkeep` → `docs/.gitkeep` (dans le dossier), idem pour media/, static/, staticfiles/
+4. **.pytest_cache** : ajouté au `.gitignore` racine
+5. **Django 5.2.15** : rétrogradé depuis 6.0.6 pour conformité (le cahier des charges impose Django 5.x)
+6. **Chart.js** : v4.4.4 avait une erreur TLD → passé à v3.9.1 via jsdelivr
+7. **Chat navigation** : `classList.toggle` → `classList.add` (bug second clic)
+8. **Chat badge non-lus** : ajout `mark_read` WebSocket à l'ouverture et à réception message
+9. **Chat crash null** : `chatLoading` détruit par `loadMessages` → recréé à chaque `openConversation`
+10. **Favicon** : inline SVG + route Django (`/favicon.ico`)
+11. **Login** : page standalone (pas d'extension base.html) pour éviter cache CSS `.main-content`
